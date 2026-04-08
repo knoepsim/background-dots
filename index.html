@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Particle Wallpaper</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #383E42; }
+
+    #viewport {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    canvas {
+      display: block;
+      /* size set via JS */
+      image-rendering: auto;
+    }
+
+    #panel {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 10;
+      background: rgba(10, 28, 34, 0.85);
+      border: 1px solid rgba(79, 152, 163, 0.3);
+      border-radius: 14px;
+      padding: 16px 20px;
+      backdrop-filter: blur(12px);
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+      min-width: 250px;
+      font-family: system-ui, sans-serif;
+      color: rgba(200, 240, 245, 0.85);
+      font-size: 13px;
+    }
+    .section-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(79, 152, 163, 0.6);
+      margin-top: 4px;
+      margin-bottom: -4px;
+    }
+    .row { display: flex; align-items: center; gap: 10px; }
+    .row label { flex: 0 0 90px; color: rgba(160,210,218,0.75); font-size: 12px; }
+    .row input[type="number"] {
+      width: 80px; background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(79,152,163,0.35); color: rgba(200,240,245,0.9);
+      border-radius: 7px; padding: 5px 8px; font-size: 13px; outline: none;
+    }
+    .row input[type="number"]:focus { border-color: rgba(79,152,163,0.7); }
+    .row input[type="range"] { flex: 1; accent-color: #4db8c8; cursor: pointer; }
+    .row span.val { min-width: 40px; text-align: right; font-size: 12px; color: #4db8c8; }
+    .seed-row { display: flex; align-items: center; gap: 8px; }
+    .seed-row label { flex: 0 0 90px; color: rgba(160,210,218,0.75); font-size: 12px; }
+    .seed-row input[type="number"] {
+      flex: 1; background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(79,152,163,0.35); color: rgba(200,240,245,0.9);
+      border-radius: 7px; padding: 5px 8px; font-size: 13px; outline: none;
+    }
+    .seed-row input[type="number"]:focus { border-color: rgba(79,152,163,0.7); }
+    .seed-row button {
+      padding: 5px 10px; border-radius: 7px;
+      border: 1px solid rgba(79,152,163,0.35); background: rgba(79,152,163,0.12);
+      color: rgba(200,240,245,0.8); font-size: 13px; cursor: pointer; transition: background 0.18s;
+    }
+    .seed-row button:hover { background: rgba(79,152,163,0.3); }
+    .btn-row { display: flex; gap: 8px; margin-top: 4px; }
+    .btn-row button {
+      flex: 1; padding: 8px 10px; border-radius: 8px; font-size: 12px; cursor: pointer;
+      border: 1px solid rgba(79,152,163,0.4); background: rgba(79,152,163,0.15);
+      color: rgba(200,240,245,0.9); transition: background 0.18s;
+    }
+    .btn-row button:hover { background: rgba(79,152,163,0.35); }
+    .btn-row button.primary { background: rgba(79,152,163,0.28); border-color: rgba(79,152,163,0.6); }
+    .btn-row button.primary:hover { background: rgba(79,152,163,0.5); }
+
+    #scale-info {
+      font-size: 10px;
+      color: rgba(79,152,163,0.6);
+      text-align: center;
+      margin-top: -4px;
+    }
+  </style>
+</head>
+<body>
+<div id="viewport">
+  <canvas id="c"></canvas>
+</div>
+<div id="panel">
+  <div class="section-label">Zufall</div>
+  <div class="seed-row">
+    <label>Seed</label>
+    <input type="number" id="seed" min="0" max="9999999" value="0">
+    <button id="rand-seed">🎲</button>
+  </div>
+
+  <div class="section-label">Export-Auflösung</div>
+  <div class="row">
+    <label>Breite (px)</label>
+    <input type="number" id="pw" min="800" max="15360" step="1" value="3840">
+  </div>
+  <div class="row">
+    <label>Höhe (px)</label>
+    <input type="number" id="ph" min="600" max="8640" step="1" value="2560">
+  </div>
+  <div id="scale-info">Vorschau: 1:1</div>
+
+  <div class="section-label">Aussehen</div>
+  <div class="row">
+    <label>Sättigung</label>
+    <input type="range" id="sat" min="0" max="100" value="100">
+    <span class="val" id="sat-val">100%</span>
+  </div>
+  <div class="row">
+    <label>Helligkeit</label>
+    <input type="range" id="bright" min="0" max="100" value="73">
+    <span class="val" id="bright-val">73%</span>
+  </div>
+  <div class="row">
+    <label>Leuchtstärke</label>
+    <input type="range" id="glow" min="0" max="100" value="25">
+    <span class="val" id="glow-val">25%</span>
+  </div>
+
+  <div class="section-label">Dots</div>
+  <div class="row">
+    <label>Dot-Größe</label>
+    <input type="range" id="dotsize" min="100" max="3000" value="800">
+    <span class="val" id="dotsize-val">800%</span>
+  </div>
+  <div class="row">
+    <label>Dot-Dichte</label>
+    <input type="range" id="dotdensity" min="1" max="100" value="10">
+    <span class="val" id="dotdensity-val">10%</span>
+  </div>
+  <div class="row">
+    <label>Dot-Abstand</label>
+    <input type="range" id="dotspacing" min="8" max="200" value="80">
+    <span class="val" id="dotspacing-val">80px</span>
+  </div>
+
+  <div class="btn-row">
+    <button id="regen-btn">↻ Neu generieren</button>
+    <button class="primary" id="save-btn">⬇ PNG speichern</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const scaleInfo = document.getElementById('scale-info');
+
+function makePRNG(seed) {
+  let s = seed >>> 0;
+  return function() {
+    s = (s + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const BASE_COLORS_HSL = [
+  [0,   0,   92],
+  [187, 72,  72],
+  [187, 80,  58],
+  [170, 75,  62],
+  [145, 68,  58],
+  [345, 82,  72],
+  [25,  90,  68],
+  [260, 78,  72],
+  [44,  92,  65],
+  [155, 78,  60],
+  [200, 80,  65],
+  [310, 72,  68],
+];
+
+function hslToHex(h, s, l) {
+  s /= 100; l /= 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => {
+    const k = (n + h / 30) % 12;
+    return Math.round(255 * (l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1))).toString(16).padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+function getAccentColors(saturation, brightness) {
+  return BASE_COLORS_HSL.map(([h, s, l]) => hslToHex(
+    h,
+    Math.min(100, s * (saturation / 100)),
+    Math.max(10, Math.min(95, l * (brightness / 100)))
+  ));
+}
+
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha.toFixed(3)})`;
+}
+
+function drawWallpaper(targetCanvas, opts) {
+  const { seed, saturation, brightness, glowStrength, dotSizeScale, dotDensity, dotSpacing } = opts;
+  const c = targetCanvas.getContext('2d');
+  const W = targetCanvas.width, H = targetCanvas.height;
+  const rand = makePRNG(seed);
+  const ACCENTS = getAccentColors(saturation, brightness);
+  const sizeMult = dotSizeScale / 100;
+  const glowMult = glowStrength / 100;
+
+  const grd = c.createRadialGradient(W * 0.4, H * 0.45, 0, W * 0.5, H * 0.5, Math.max(W, H) * 0.85);
+  grd.addColorStop(0,   '#23282B');
+  grd.addColorStop(0.5, '#1e2326');
+  grd.addColorStop(1,   '#191d1f');
+  c.fillStyle = grd;
+  c.fillRect(0, 0, W, H);
+
+  const resScale = Math.min(W, H) / 1080;
+  const spacing = Math.max(4, dotSpacing * resScale);
+  const densityRatio = dotDensity / 100;
+  const cols = Math.ceil(W / spacing) + 2;
+  const rows = Math.ceil(H / spacing) + 2;
+  const gridDots = [];
+
+  for (let i = 0; i < cols; i++) {
+    for (let j = 0; j < rows; j++) {
+      if (rand() > densityRatio) continue;
+      const jx = (rand() - 0.5) * spacing * 0.3;
+      const jy = (rand() - 0.5) * spacing * 0.3;
+      const x = i * spacing + jx;
+      const y = j * spacing + jy;
+      const isBright  = rand() < 0.14;
+      const isColored = rand() < 0.25;
+      let color;
+      if (isColored)     color = ACCENTS[Math.floor(rand() * ACCENTS.length)];
+      else if (isBright) color = ACCENTS[0];
+      else               color = rand() < 0.55 ? '#7ab5bf' : '#5a9098';
+      const baseR = isBright ? rand() * 2.0 + 1.2 : rand() * 0.9 + 0.35;
+      const radius = baseR * sizeMult;
+
+      // Enforce minimum gap: dot must not touch any existing dot
+      const minGap = 2; // px clearance between edges
+      let tooClose = false;
+      for (const existing of gridDots) {
+        const dx = x - existing.x, dy = y - existing.y;
+        if (Math.sqrt(dx*dx + dy*dy) < radius + existing.radius + minGap) {
+          tooClose = true; break;
+        }
+      }
+      if (tooClose) continue;
+
+      const alpha  = isBright ? rand() * 0.7 + 0.4 : rand() * 0.35 + 0.12;
+      const glowR  = radius * (rand() * 2 + 1.8);
+      gridDots.push({ x, y, radius, color, alpha, isBright, isColored, glowR });
+    }
+  }
+
+  if (glowMult > 0) {
+    for (const d of gridDots) {
+      if (!d.isBright && !d.isColored) continue;
+      const g2 = c.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.glowR);
+      g2.addColorStop(0, hexToRgba(d.color, d.alpha * 0.35 * glowMult));
+      g2.addColorStop(1, hexToRgba(d.color, 0));
+      c.beginPath(); c.arc(d.x, d.y, d.glowR, 0, Math.PI * 2);
+      c.fillStyle = g2; c.fill();
+    }
+  }
+  for (const d of gridDots) {
+    c.beginPath(); c.arc(d.x, d.y, d.radius, 0, Math.PI * 2);
+    c.fillStyle = hexToRgba(d.color, d.alpha); c.fill();
+  }
+
+  const floatCount = Math.floor((W * H) / 16000 * (densityRatio * 1.2));
+  const floaters = [];
+  const allDots = gridDots; // reference for collision check
+  for (let i = 0; i < floatCount; i++) {
+    const x = rand() * W, y = rand() * H;
+    const color = ACCENTS[Math.floor(rand() * ACCENTS.length)];
+    const radius = (rand() * 3.5 + 1.0) * sizeMult;
+    const minGap = 2;
+    let tooClose = false;
+    for (const existing of allDots) {
+      const dx = x - existing.x, dy = y - existing.y;
+      if (Math.sqrt(dx*dx + dy*dy) < radius + existing.radius + minGap) {
+        tooClose = true; break;
+      }
+    }
+    for (const existing of floaters) {
+      const dx = x - existing.x, dy = y - existing.y;
+      if (Math.sqrt(dx*dx + dy*dy) < radius + existing.radius + minGap) {
+        tooClose = true; break;
+      }
+    }
+    if (tooClose) continue;
+    const alpha  = rand() * 0.75 + 0.3;
+    const glowR  = radius * (rand() * 3 + 2.0);
+    floaters.push({ x, y, radius, color, alpha, glowR });
+  }
+
+  for (let i = 0; i < floaters.length; i++) {
+    for (let j = i + 1; j < floaters.length; j++) {
+      const dx = floaters[i].x - floaters[j].x;
+      const dy = floaters[i].y - floaters[j].y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 110) {
+        c.beginPath();
+        c.moveTo(floaters[i].x, floaters[i].y);
+        c.lineTo(floaters[j].x, floaters[j].y);
+        c.strokeStyle = `rgba(100,200,210,${((1 - dist / 110) * 0.1).toFixed(3)})`;
+        c.lineWidth = 0.5; c.stroke();
+      }
+    }
+  }
+
+  if (glowMult > 0) {
+    for (const f of floaters) {
+      const g2 = c.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.glowR);
+      g2.addColorStop(0, hexToRgba(f.color, f.alpha * 0.45 * glowMult));
+      g2.addColorStop(1, hexToRgba(f.color, 0));
+      c.beginPath(); c.arc(f.x, f.y, f.glowR, 0, Math.PI * 2);
+      c.fillStyle = g2; c.fill();
+    }
+  }
+  for (const f of floaters) {
+    c.beginPath(); c.arc(f.x, f.y, f.radius, 0, Math.PI * 2);
+    c.fillStyle = hexToRgba(f.color, f.alpha); c.fill();
+  }
+}
+
+function randomSeed() { return Math.floor(Math.random() * 9999999); }
+
+function getOpts() {
+  return {
+    seed:         parseInt(document.getElementById('seed').value) || 0,
+    saturation:   parseInt(document.getElementById('sat').value),
+    brightness:   parseInt(document.getElementById('bright').value),
+    glowStrength: parseInt(document.getElementById('glow').value),
+    dotSizeScale: parseInt(document.getElementById('dotsize').value),
+    dotDensity:   parseInt(document.getElementById('dotdensity').value),
+    dotSpacing:   parseInt(document.getElementById('dotspacing').value),
+  };
+}
+
+function getExportSize() {
+  return {
+    pw: parseInt(document.getElementById('pw').value) || 1920,
+    ph: parseInt(document.getElementById('ph').value) || 1080,
+  };
+}
+
+// Render canvas at export resolution, then CSS-scale to fit the viewport
+function render() {
+  const { pw, ph } = getExportSize();
+  const opts = getOpts();
+
+  // Set canvas intrinsic size to export resolution
+  canvas.width  = pw;
+  canvas.height = ph;
+
+  drawWallpaper(canvas, opts);
+
+  // Scale canvas via CSS so it fits fully inside the browser window
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const scale = Math.min(vw / pw, vh / ph, 1); // never upscale beyond 1:1
+  canvas.style.width  = Math.round(pw * scale) + 'px';
+  canvas.style.height = Math.round(ph * scale) + 'px';
+
+  if (scale >= 1) {
+    scaleInfo.textContent = 'Vorschau: 1:1';
+  } else {
+    scaleInfo.textContent = `Vorschau: ${Math.round(scale * 100)}% (${pw}×${ph})`;
+  }
+}
+
+document.getElementById('seed').value = randomSeed();
+render();
+
+window.addEventListener('resize', render);
+
+document.getElementById('rand-seed').addEventListener('click', () => {
+  document.getElementById('seed').value = randomSeed();
+  render();
+});
+document.getElementById('regen-btn').addEventListener('click', render);
+
+// Re-render when export size changes (so preview updates)
+document.getElementById('pw').addEventListener('change', render);
+document.getElementById('ph').addEventListener('change', render);
+
+function liveSlider(id, labelId, suffix) {
+  const el = document.getElementById(id);
+  const lbl = document.getElementById(labelId);
+  el.addEventListener('input', () => { lbl.textContent = el.value + suffix; render(); });
+}
+liveSlider('sat',        'sat-val',        '%');
+liveSlider('bright',     'bright-val',     '%');
+liveSlider('glow',       'glow-val',       '%');
+liveSlider('dotsize',    'dotsize-val',    '%');
+liveSlider('dotdensity', 'dotdensity-val', '%');
+liveSlider('dotspacing', 'dotspacing-val', 'px');
+
+document.getElementById('save-btn').addEventListener('click', () => {
+  const { pw, ph } = getExportSize();
+  const opts = getOpts();
+  // Export at full resolution (not the scaled preview)
+  const offscreen = document.createElement('canvas');
+  offscreen.width = pw; offscreen.height = ph;
+  drawWallpaper(offscreen, opts);
+  const link = document.createElement('a');
+  link.download = `wallpaper-${opts.seed}-${pw}x${ph}.png`;
+  link.href = offscreen.toDataURL('image/png');
+  link.click();
+});
+</script>
+</body>
+</html>
